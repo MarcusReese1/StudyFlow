@@ -33,7 +33,9 @@ class Assignment {
 }
 
 class StudyFlowApp extends StatelessWidget {
-  const StudyFlowApp({super.key});
+  const StudyFlowApp({super.key, this.initialAssignments});
+
+  final List<Assignment>? initialAssignments;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +46,7 @@ class StudyFlowApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const AssignmentHomePage(),
+      home: AssignmentHomePage(initialAssignments: initialAssignments),
     );
   }
 }
@@ -52,23 +54,34 @@ class StudyFlowApp extends StatelessWidget {
 enum AssignmentFilter { all, upcoming, completed }
 
 class AssignmentHomePage extends StatefulWidget {
-  const AssignmentHomePage({super.key});
+  const AssignmentHomePage({super.key, this.initialAssignments});
+
+  final List<Assignment>? initialAssignments;
 
   @override
   State<AssignmentHomePage> createState() => _AssignmentHomePageState();
 }
 
 class _AssignmentHomePageState extends State<AssignmentHomePage> {
-  final List<Assignment> _assignments = [
-    Assignment(
-      title: 'Read Chapter 1',
-      dueDate: DateTime.now().add(const Duration(days: 2)),
-    ),
-    Assignment(
-      title: 'Submit project proposal',
-      dueDate: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-  ];
+  late final List<Assignment> _assignments;
+
+  @override
+  void initState() {
+    super.initState();
+    _assignments =
+        widget.initialAssignments ??
+        [
+          Assignment(
+            title: 'Read Chapter 1',
+            dueDate: DateTime.now().add(const Duration(days: 2)),
+          ),
+          Assignment(
+            title: 'Submit project proposal',
+            dueDate: DateTime.now().subtract(const Duration(days: 1)),
+          ),
+        ];
+  }
+
   AssignmentFilter _filter = AssignmentFilter.all;
 
   List<Assignment> get _visibleAssignments {
@@ -227,50 +240,65 @@ class _AssignmentHomePageState extends State<AssignmentHomePage> {
           ),
           Expanded(
             child: assignments.isEmpty
-                ? const Center(child: Text('No assignments here yet.'))
+                ? Center(
+                    child: Text(
+                      _filter == AssignmentFilter.upcoming
+                          ? 'All caught up!'
+                          : 'No assignments here yet.',
+                    ),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 88),
                     itemCount: assignments.length,
                     itemBuilder: (context, index) {
                       final assignment = assignments[index];
                       final color = assignment.isOverdue ? Colors.red : null;
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        child: CheckboxListTile(
-                          value: assignment.isComplete,
-                          onChanged: (value) => setState(
-                            () => assignment.isComplete = value ?? false,
+                      return Opacity(
+                        key: ValueKey('assignment-${assignment.title}'),
+                        opacity: assignment.isComplete ? 0.55 : 1,
+                        child: Card(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
                           ),
-                          title: Text(
-                            assignment.title,
-                            style: TextStyle(
-                              color: color,
-                              decoration: assignment.isComplete
-                                  ? TextDecoration.lineThrough
-                                  : null,
+                          child: CheckboxListTile(
+                            value: assignment.isComplete,
+                            onChanged: (value) => setState(
+                              () => assignment.isComplete = value ?? false,
                             ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Course / class: ${assignment.course.isEmpty ? 'Unspecified' : assignment.course}',
+                            title: Semantics(
+                              label: assignment.isComplete
+                                  ? '${assignment.title}, completed'
+                                  : assignment.title,
+                              child: Text(
+                                assignment.title,
+                                style: TextStyle(
+                                  color: color,
+                                  decoration: assignment.isComplete
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
                               ),
-                              Text('Priority: ${assignment.priority.label}'),
-                              Text(
-                                assignment.isOverdue
-                                    ? 'Overdue • ${_formatDate(assignment.dueDate)}'
-                                    : 'Due ${_formatDate(assignment.dueDate)}',
-                                style: TextStyle(color: color),
-                              ),
-                            ],
-                          ),
-                          secondary: Icon(
-                            Icons.calendar_today_outlined,
-                            color: color,
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Course / class: ${assignment.course.isEmpty ? 'Unspecified' : assignment.course}',
+                                ),
+                                Text('Priority: ${assignment.priority.label}'),
+                                Text(
+                                  assignment.isOverdue
+                                      ? 'Overdue • ${_formatDate(assignment.dueDate)}'
+                                      : 'Due ${_formatDate(assignment.dueDate)}',
+                                  style: TextStyle(color: color),
+                                ),
+                              ],
+                            ),
+                            secondary: Icon(
+                              Icons.calendar_today_outlined,
+                              color: color,
+                            ),
                           ),
                         ),
                       );
