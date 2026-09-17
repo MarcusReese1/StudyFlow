@@ -2,15 +2,29 @@ import 'package:flutter/material.dart';
 
 void main() => runApp(const StudyFlowApp());
 
+enum AssignmentPriority {
+  low('Low'),
+  med('Med'),
+  high('High');
+
+  const AssignmentPriority(this.label);
+
+  final String label;
+}
+
 class Assignment {
   Assignment({
     required this.title,
     required this.dueDate,
+    this.course = '',
+    this.priority = AssignmentPriority.med,
     this.isComplete = false,
   });
 
   final String title;
   final DateTime dueDate;
+  final String course;
+  final AssignmentPriority priority;
   bool isComplete;
 
   bool get isOverdue =>
@@ -70,47 +84,77 @@ class _AssignmentHomePageState extends State<AssignmentHomePage> {
 
   Future<void> _addAssignment() async {
     final controller = TextEditingController();
+    final courseController = TextEditingController();
+    var selectedPriority = AssignmentPriority.med;
     var selectedDate = DateTime.now().add(const Duration(days: 1));
-    final assignment = await showDialog<Assignment>(
+    final route = DialogRoute<Assignment>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Add assignment'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Assignment title',
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: Text('Due: ${_formatDate(selectedDate)}')),
-                  TextButton(
-                    onPressed: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime.now().subtract(
-                          const Duration(days: 365),
-                        ),
-                        lastDate: DateTime.now().add(
-                          const Duration(days: 3650),
-                        ),
-                      );
-                      if (date != null) {
-                        setDialogState(() => selectedDate = date);
-                      }
-                    },
-                    child: const Text('Choose date'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Assignment title',
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: courseController,
+                  decoration: const InputDecoration(
+                    labelText: 'Course / class',
+                    hintText: 'e.g. Biology',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<AssignmentPriority>(
+                  initialValue: selectedPriority,
+                  decoration: const InputDecoration(labelText: 'Priority'),
+                  items: AssignmentPriority.values
+                      .map(
+                        (priority) => DropdownMenuItem(
+                          value: priority,
+                          child: Text(priority.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (priority) {
+                    if (priority != null) {
+                      setDialogState(() => selectedPriority = priority);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: Text('Due: ${_formatDate(selectedDate)}')),
+                    TextButton(
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime.now().subtract(
+                            const Duration(days: 365),
+                          ),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 3650),
+                          ),
+                        );
+                        if (date != null && context.mounted) {
+                          setDialogState(() => selectedDate = date);
+                        }
+                      },
+                      child: const Text('Choose date'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -123,7 +167,12 @@ class _AssignmentHomePageState extends State<AssignmentHomePage> {
                 if (title.isNotEmpty) {
                   Navigator.pop(
                     dialogContext,
-                    Assignment(title: title, dueDate: selectedDate),
+                    Assignment(
+                      title: title,
+                      dueDate: selectedDate,
+                      course: courseController.text.trim(),
+                      priority: selectedPriority,
+                    ),
                   );
                 }
               },
@@ -133,8 +182,14 @@ class _AssignmentHomePageState extends State<AssignmentHomePage> {
         ),
       ),
     );
+    final assignment = await Navigator.of(context).push(route);
+    // Keep controllers alive until the dialog's closing animation finishes.
+    await route.completed;
     controller.dispose();
-    if (assignment != null) setState(() => _assignments.add(assignment));
+    courseController.dispose();
+    if (mounted && assignment != null) {
+      setState(() => _assignments.add(assignment));
+    }
   }
 
   String _formatDate(DateTime date) => '${date.month}/${date.day}/${date.year}';
@@ -198,11 +253,20 @@ class _AssignmentHomePageState extends State<AssignmentHomePage> {
                                   : null,
                             ),
                           ),
-                          subtitle: Text(
-                            assignment.isOverdue
-                                ? 'Overdue • ${_formatDate(assignment.dueDate)}'
-                                : 'Due ${_formatDate(assignment.dueDate)}',
-                            style: TextStyle(color: color),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Course / class: ${assignment.course.isEmpty ? 'Unspecified' : assignment.course}',
+                              ),
+                              Text('Priority: ${assignment.priority.label}'),
+                              Text(
+                                assignment.isOverdue
+                                    ? 'Overdue • ${_formatDate(assignment.dueDate)}'
+                                    : 'Due ${_formatDate(assignment.dueDate)}',
+                                style: TextStyle(color: color),
+                              ),
+                            ],
                           ),
                           secondary: Icon(
                             Icons.calendar_today_outlined,
